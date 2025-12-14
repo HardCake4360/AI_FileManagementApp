@@ -4,7 +4,7 @@
 PlayerSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 28
-  productGUID: ab395374849a5e7419ff1f2191a59073
+  productGUID: 002713a3bc364424183dd03786e1613f
   AndroidProfiler: 0
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DefaultCompany
-  productName: AI_FileManagementSystem
+  productName: ProjectFileManager
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -609,14 +609,14 @@ PlayerSettings:
   editorAssembliesCompatibilityLevel: 1
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: AI_FileManagementSystem
+  metroPackageName: ProjectFileManager
   metroPackageVersion: 
   metroCertificatePath: 
   metroCertificatePassword: 
   metroCertificateSubject: 
   metroCertificateIssuer: 
   metroCertificateNotAfter: 0000000000000000
-  metroApplicationDescription: AI_FileManagementSystem
+  metroApplicationDescription: ProjectFileManager
   wsaImages: {}
   metroTileShortName: 
   metroTileShowName: 0
@@ -687,10 +687,10 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 2
   windowsGamepadBackendHint: 0
-  cloudProjectId: d4b6a159-9725-4e38-a9f1-70225939805b
+  cloudProjectId: 9cc56f62-f4a8-4510-b46e-2a204fbf3a72
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: AI_FileManagementSystem
+  projectName: ProjectFileManager
   organizationId: chriskim4360
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
