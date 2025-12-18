@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.IO;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.Events;
 using UnityEngine.Networking;
 using TMPro;
@@ -38,6 +39,18 @@ public class SearchResponse
 
 public class RAGSearchClient : MonoBehaviour
 {
+    public static RAGSearchClient Instance { get; private set; }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
+
     [Header("Server")]
     [SerializeField] private string baseUrl = "http://localhost:5001";
     [SerializeField] private int topK = 20;
@@ -46,7 +59,7 @@ public class RAGSearchClient : MonoBehaviour
     public TMP_InputField tmpInputField;
 
     [Header("Root Path Input")]
-    public TMPro.TMP_InputField rootTMPInput;
+    public TMP_InputField rootTMPInput;
 
     [Header("Indexing")]
     public TMP_InputField rootPathInput;
@@ -66,8 +79,11 @@ public class RAGSearchClient : MonoBehaviour
 
     [Header("Properties")]
     [SerializeField] GameObject resultPrefab;
-    [SerializeField] GameObject refreshUI;
+    [SerializeField] RectTransform refreshUI;
     [SerializeField] Transform resultViewTransform;
+    [SerializeField] ScrollRect scrollRect;
+
+    int testInt = 0;
 
     [System.Serializable]
     class IndexScanOptions
@@ -99,6 +115,27 @@ public class RAGSearchClient : MonoBehaviour
     }
 
 
+    // --------------------------
+    // File Delete (Soft delete)
+    // --------------------------
+    [System.Serializable]
+    public class DeleteFileRequest
+    {
+        public string path;
+    }
+
+    [System.Serializable]
+    public class DeleteFileResponse
+    {
+        public bool ok;
+        public string path;
+        public bool deleted;
+        public bool thumbnail_deleted;
+        public string msg;
+    }
+
+
+
 
     [Serializable]
     public class SearchRequest
@@ -117,6 +154,14 @@ public class RAGSearchClient : MonoBehaviour
     private void Start()
     {
         clearResultList();
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Return) && tmpInputField.text != "")
+        {
+            SearchButton();
+        }
     }
 
     public void RequestIndexing()
@@ -179,14 +224,19 @@ public class RAGSearchClient : MonoBehaviour
         if (resp.need_index)
         {
             Debug.LogWarning($"[RAGSearchClient] Server says indexing required. Message: {resp.msg}");
-            // !!!!!!!!!!!!!!!!!!!!!!여기서 인덱싱 패널 열기, 알림 토스트 띄우기 등 UI 처리!!!!!!!!!!!!!!!!!!!!!!
             yield break;
         }
 
         // 결과 저장
         SaveResults(resp.results);
-
         setResultUI(resp);
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(refreshUI);
+
+        yield return null;
+
+        scrollRect.normalizedPosition = new Vector2(0, 1);
+
         // 이벤트 콜백
         onResults?.Invoke(resp.results);
     }
@@ -200,6 +250,7 @@ public class RAGSearchClient : MonoBehaviour
         if (string.IsNullOrWhiteSpace(rootPath))
         {
             Debug.LogWarning("[RAGSearchClient] 루트 경로가 비어있음");
+            NotificationManager.Instance.Show("루트 경로가 비어있습니다. 유효한 경로를 입력해주세요.");
             return;
         }
 
@@ -212,6 +263,7 @@ public class RAGSearchClient : MonoBehaviour
 
     System.Collections.IEnumerator IndexScanCoroutine(string rootPath)
     {
+        NotificationManager.Instance.Show("인덱싱 시작");
         // 요청 바디 구성
         var req = new IndexScanRequest
         {
@@ -237,6 +289,7 @@ public class RAGSearchClient : MonoBehaviour
         if (uwr.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
         {
             Debug.LogError($"[RAGSearchClient] /index/scan 실패: {uwr.error}\n{uwr.downloadHandler.text}");
+            NotificationManager.Instance.Show("요청을 실패했습니다. 다시 시도해주세요.");
             yield break;
         }
 
@@ -246,6 +299,7 @@ public class RAGSearchClient : MonoBehaviour
         if (resp == null || !string.IsNullOrEmpty(resp.error))
         {
             Debug.LogError($"[RAGSearchClient] 인덱싱 실패: {respJson}");
+            NotificationManager.Instance.Show("인덱스 생성 실패");
             yield break;
         }
 
@@ -258,8 +312,87 @@ public class RAGSearchClient : MonoBehaviour
             $"- Added:{resp.added} Modified:{resp.modified} Removed:{resp.removed}\n" +
             $"- Time: {resp.elapsed_sec:F2}s"
         );
+        NotificationManager.Instance.Show("인덱스 생성 성공했습니다");
     }
 
+
+
+
+    // --------------------------
+    // Public API: Delete file on server (soft delete)
+    // --------------------------
+    public void RequestDeleteFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            Debug.LogWarning("[RAGSearchClient] Delete path is empty.");
+            NotificationManager.Instance.Show("삭제하려는 경로가 비어있습니다");
+            return;
+        }
+        StartCoroutine(DeleteFileCoroutine(filePath.Trim(), null));
+    }
+
+    /// <summary>
+    /// Calls POST /file/delete with JSON { path }.
+    /// </summary>
+    public IEnumerator DeleteFileCoroutine(string filePath, UnityAction<DeleteFileResponse> onDone)
+    {
+        var req = new DeleteFileRequest { path = filePath };
+        var url = $"{baseUrl}/file/delete";
+        var json = JsonUtility.ToJson(req);
+
+        var uwr = new UnityWebRequest(url, "POST");
+        uwr.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+        uwr.downloadHandler = new DownloadHandlerBuffer();
+        uwr.SetRequestHeader("Content-Type", "application/json");
+
+        yield return uwr.SendWebRequest();
+
+        if (uwr.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError($"[RAGSearchClient] /file/delete 실패: {uwr.error}\n{uwr.downloadHandler.text}");
+            NotificationManager.Instance.Show("삭제 요청을 실패했습니다.");
+            onDone?.Invoke(new DeleteFileResponse
+            {
+                ok = false,
+                path = filePath,
+                msg = uwr.error
+            });
+            yield break;
+        }
+
+        var respJson = uwr.downloadHandler.text;
+        var resp = JsonUtility.FromJson<DeleteFileResponse>(respJson);
+
+        if (resp == null)
+        {
+            Debug.LogWarning($"[RAGSearchClient] /file/delete 응답 파싱 실패: {respJson}");
+            NotificationManager.Instance.Show("유효하지 않은 경로입니다");
+            onDone?.Invoke(new DeleteFileResponse
+            {
+                ok = false,
+                path = filePath,
+                msg = "parse failed"
+            });
+            yield break;
+        }
+
+        if (resp.ok)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+            }
+            catch (Exception e)
+            {
+                resp.msg = (resp.msg ?? "") + $" | local delete failed: {e.GetType().Name}";
+            }
+        }
+
+
+        onDone?.Invoke(resp);
+    }
 
     void clearResultList()
     {
@@ -268,11 +401,11 @@ public class RAGSearchClient : MonoBehaviour
             Destroy(child.gameObject);
         }
     }
-    
+
     void setResultUI(SearchResponse resp)
     {
         clearResultList();
-        foreach(var item in resp.results)
+        foreach (var item in resp.results)
         {
             // --- PATCH: ensure absolute thumbnail URL ---
             if (!string.IsNullOrEmpty(item.thumbnail))
@@ -286,8 +419,12 @@ public class RAGSearchClient : MonoBehaviour
 
             GameObject go = Instantiate(resultPrefab, resultViewTransform);
             go.GetComponent<ResultPrefab>().SetMembers(item);
-            Canvas.ForceUpdateCanvases();
         }
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(refreshUI);
+
+        // 이제 스크롤 위치를 조정 (예: 맨 위로)
+        scrollRect.normalizedPosition = new Vector2(0, 1);
     }
 
     string BuildRequestJson(string query)
@@ -322,5 +459,12 @@ public class RAGSearchClient : MonoBehaviour
     private class Wrapper
     {
         public List<SearchResultItem> results;
+    }
+
+    //디버그용 함수
+    public void PopupTest()
+    {
+        testInt++;
+        NotificationManager.Instance.Show("테스트 팝업 생성: "+testInt,999);
     }
 }

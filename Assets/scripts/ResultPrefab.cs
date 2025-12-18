@@ -18,12 +18,14 @@ public class ResultPrefab : MonoBehaviour
     [SerializeField] TextMeshProUGUI score;
     [SerializeField] TextMeshProUGUI description;
     [SerializeField] TagsList tagsList;
-    [SerializeField] Button fav;
     [SerializeField] Button copy;
     [SerializeField] Button show;
     [SerializeField] Button delete;
 
-    string pathString;
+    [SerializeField] GameObject confirmPrefab;
+
+    GameObject confirmActive;
+    public string pathString;
 
     public void SetMembers(SearchResultItem item)
     {
@@ -35,10 +37,6 @@ public class ResultPrefab : MonoBehaviour
         description.text = item.description;
         ApplyThumbnail(item.thumbnail);
 
-        fav.onClick.AddListener(() =>
-        {
-            onFavorite();
-        });
         copy.onClick.AddListener(() =>
         {
             onCopy();
@@ -95,7 +93,7 @@ public class ResultPrefab : MonoBehaviour
 
     void onFavorite()
     {
-
+        
     }
 
     void onCopy()
@@ -103,12 +101,14 @@ public class ResultPrefab : MonoBehaviour
         if (string.IsNullOrWhiteSpace(pathString))
         {
             UnityEngine.Debug.LogWarning("[PathActions] 빈 경로입니다.");
+            NotificationManager.Instance.Show("경로가 비어있습니다");
             return;
         }
 
         string normalized = NormalizePath(pathString);
         GUIUtility.systemCopyBuffer = normalized;
         UnityEngine.Debug.Log($"[PathActions] 클립보드로 복사: {normalized}");
+        NotificationManager.Instance.Show("경로를 클립보드로 복사했습니다");
     }
 
     void onShow()
@@ -117,6 +117,7 @@ public class ResultPrefab : MonoBehaviour
         if (string.IsNullOrWhiteSpace(pathString))
         {
             UnityEngine.Debug.LogWarning("[PathActions] 빈 경로입니다.");
+            NotificationManager.Instance.Show("경로가 비어있습니다");
             return;
         }
 
@@ -145,16 +146,19 @@ public class ResultPrefab : MonoBehaviour
                 if (!string.IsNullOrEmpty(targetDir))
                 {
                     UnityEngine.Debug.LogWarning($"[PathActions] 대상이 없어 상위 폴더를 엽니다: {targetDir}");
+                    NotificationManager.Instance.Show("대상이 없어 상위 폴더를 엽니다");
                     LaunchExplorerOpen(targetDir);
                     return;
                 }
 
                 UnityEngine.Debug.LogError($"[PathActions] 경로를 찾을 수 없습니다: {normalized}");
+                NotificationManager.Instance.Show("경로를 찾을 수 없습니다");
             }
         }
         catch (Exception e)
         {
             UnityEngine.Debug.LogError($"[PathActions] 탐색기 열기 실패: {e.Message}\nPath: {normalized}");
+            NotificationManager.Instance.Show("탐색기 호출 실패. 다시 시도해주세요");
         }
 #else
         Debug.LogWarning("[PathActions] 이 기능은 Windows에서만 지원됩니다.");
@@ -163,6 +167,13 @@ public class ResultPrefab : MonoBehaviour
 
     void onDelete()
     {
+        if (!confirmActive)
+        {
+            confirmActive = Instantiate(confirmPrefab, delete.gameObject.transform);
+            confirmActive.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, 0);
+            confirmActive.GetComponent<DeleteConfirmUI>().SetUI(pathString, gameObject);
+            confirmActive.transform.SetAsLastSibling();
+        }
 
     }
 
